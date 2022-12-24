@@ -48,13 +48,14 @@ def _html_escape(string):
     return string
 
 
-def _get_key(key, scopes, warn, keep, def_ldel, def_rdel):
+def _get_key(key, scopes, keep, def_ldel, def_rdel, warn=False):
     """Get a key from the current scope"""
-
+    keyStatus = True
+    
     # If the key is a dot
     if key == '.':
         # Then just return the current scope
-        return scopes[0]
+        return scopes[0],keyStatus
 
     # Loop through the scopes
     for scope in scopes:
@@ -75,15 +76,15 @@ def _get_key(key, scopes, warn, keep, def_ldel, def_rdel):
             # Return an empty string if falsy, with two exceptions
             # 0 should return 0, and False should return False
             if scope in (0, False):
-                return scope
+                return scope,keyStatus
 
             try:
                 # This allows for custom falsy data types
                 # https://github.com/noahmorrison/chevron/issues/35
                 if scope._CHEVRON_return_scope_when_falsy:
-                    return scope
+                    return scope,keyStatus
             except AttributeError:
-                return scope or ''
+                return scope or '',keyStatus
         except (AttributeError, KeyError, IndexError, ValueError):
             # We couldn't find the key in the current scope
             # We'll try again on the next pass
@@ -92,12 +93,11 @@ def _get_key(key, scopes, warn, keep, def_ldel, def_rdel):
     # We couldn't find the key in any of the scopes
 
     if warn:
-        sys.stderr.write("Could not find key '%s'%s" % (key, linesep))
-
-    if keep:
-        return "%s %s %s" % (def_ldel, key, def_rdel)
-
-    return ''
+        if key[0] != '?':
+            keyStatus = False
+            print("Could not find key:", key)
+        
+    return '',keyStatus
 
 
 def _get_partial(name, partials_dict, partials_path, partials_ext):
@@ -184,7 +184,7 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
 
     A string containing the rendered template.
     """
-
+    renderStatus = True
     # If the template is a seqeuence but not derived from a string
     if isinstance(template, Sequence) and \
             not isinstance(template, string_type):
@@ -230,7 +230,9 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
         # If we're a variable tag
         elif tag == 'variable':
             # Add the html escaped key to the output
-            thing = _get_key(key, scopes, warn=warn, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel)
+            thing = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
+            if keyStatus == False:
+                renderStatus = False
             if thing is True and key == '.':
                 # if we've coerced into a boolean by accident
                 # (inverted tags do this)
@@ -243,7 +245,9 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
         # If we're a no html escape tag
         elif tag == 'no escape':
             # Just lookup the key and add it
-            thing = _get_key(key, scopes, warn=warn, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel)
+            thing = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
+            if keyStatus == False:
+                renderStatus = False
             if not isinstance(thing, unicode_type):
                 thing = unicode(str(thing), 'utf-8')
             output += thing
@@ -251,8 +255,9 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
         # If we're a section tag
         elif tag == 'section':
             # Get the sections scope
-            scope = _get_key(key, scopes, warn=warn, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel)
-
+            scope = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
+            if keyStatus == False:
+                renderStatus = False
             # If the scope is a callable (as described in
             # https://mustache.github.io/mustache.5.html)
             if isinstance(scope, Callable):
@@ -323,7 +328,7 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
                 for thing in scope:
                     # Append it as the most recent scope and render
                     new_scope = [thing] + scopes
-                    rend = render(template=tags, scopes=new_scope,
+                    rend,renderStatus = render(template=tags, scopes=new_scope,
                                   padding=padding,
                                   partials_path=partials_path,
                                   partials_ext=partials_ext,
@@ -343,7 +348,9 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
         # If we're an inverted section
         elif tag == 'inverted section':
             # Add the flipped scope to the scopes
-            scope = _get_key(key, scopes, warn=warn, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel)
+            scope,keyStatus = _get_key(key, scopes, warn=warn, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel)
+            if keyStatus == False:
+                renderStatus = False
             scopes.insert(0, not scope)
 
         # If we're a partial
@@ -359,7 +366,7 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
                 part_padding += left
 
             # Render the partial
-            part_out = render(template=partial, partials_path=partials_path,
+            part_out,renderStatus = render(template=partial, partials_path=partials_path,
                               partials_ext=partials_ext,
                               partials_dict=partials_dict,
                               def_ldel=def_ldel, def_rdel=def_rdel,
@@ -378,6 +385,6 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
                 output += part_out.decode('utf-8')
 
     if python3:
-        return output
+        return output,renderStatus
     else:  # python 2
-        return output.encode('utf-8')
+        return output.encode('utf-8'),renderStatus
