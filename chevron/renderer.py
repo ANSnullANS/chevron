@@ -230,7 +230,7 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
         # If we're a variable tag
         elif tag == 'variable':
             # Add the html escaped key to the output
-            thing = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
+            thing,keyStatus = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
             if keyStatus == False:
                 renderStatus = False
             if thing is True and key == '.':
@@ -245,7 +245,7 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
         # If we're a no html escape tag
         elif tag == 'no escape':
             # Just lookup the key and add it
-            thing = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
+            thing,KeyStatus = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
             if keyStatus == False:
                 renderStatus = False
             if not isinstance(thing, unicode_type):
@@ -255,7 +255,7 @@ def render(template='', data={}, partials_path='.', partials_ext='mustache',
         # If we're a section tag
         elif tag == 'section':
             # Get the sections scope
-            scope = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
+            scope,keyStatus = _get_key(key, scopes, keep=keep, def_ldel=def_ldel, def_rdel=def_rdel, warn=warn)
             if keyStatus == False:
                 renderStatus = False
             # If the scope is a callable (as described in
